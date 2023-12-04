@@ -1,0 +1,71 @@
+version: '3'
+
+services:
+  db:
+    container_name: rp_postgres
+    image: postgres:latest
+    env_file:
+      - .env
+    restart: always
+    ports:
+      - "5432:5432"
+    networks:
+      - RP_project
+
+
+  rabbitmq:
+    container_name: rp_rabbitmq
+    image: rabbitmq:latest
+    env_file:
+      - .env
+    restart: always
+    ports:
+      - "5672:5672"
+    healthcheck:
+      test: [ "CMD", "rabbitmqctl", "status" ]
+      interval: 5s
+      timeout: 10s
+      retries: 200
+    networks:
+      - RP_project
+
+  celery_worker:
+    container_name: rp_celery
+    build:
+      context: .
+    image: celery:latest
+    env_file:
+      - .env
+    command: celery -A RP_app.api.services.tasks worker --loglevel=INFO -B
+    restart: always
+    networks:
+      - RP_project
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      drf:
+        condition: service_started
+
+  drf:
+    container_name: rp_drf
+    build:
+      context: .
+    command: >
+             sh -c "
+             python manage.py migrate &&
+             python manage.py makemigrations &&
+             python manage.py runserver 0.0.0.0:8000 --noreload"
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    networks:
+      - RP_project
+    restart: always
+    depends_on:
+      - db
+
+
+networks:
+  RP_project:
+    driver: bridge

@@ -1,0 +1,43 @@
+version: '3'
+
+services:
+  db:
+    container_name: rp_postgres_test
+    image: postgres:latest
+    env_file:
+      - ./.env
+    healthcheck:
+      test: pg_isready -U $$POSTGRES_USER
+      interval: 5s
+      timeout: 10s
+      retries: 120
+    restart: always
+    ports:
+      - "5432:5432"
+    networks:
+      - RP_project
+
+  drf:
+    container_name: rp_drf_test
+    build:
+      context: .
+    command: >
+      sh -c "
+      python manage.py migrate &&
+      python manage.py makemigrations &&
+      python manage.py runserver 0.0.0.0:8000 --noreload"
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./.env
+    networks:
+      - RP_project
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+
+
+networks:
+  RP_project:
+    driver: bridge
